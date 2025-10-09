@@ -112,12 +112,12 @@
     function downloadImage(url, filename) {
         fetch(url, { mode: 'cors' })
             .then(response => response.blob())
-            .then(blob => {
+            .then(blob => {   // creating object into binary data, if not we will not be able to download the image
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
                 link.download = filename;
                 document.body.appendChild(link);
-                link.click();
+                link.click(); // we will not be able to download the link
                 document.body.removeChild(link);
             })
             .catch(() => alert('Failed to download thumbnail.'));
