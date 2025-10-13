@@ -51,8 +51,8 @@ public class YoutubeTagsController {
 
         }catch (Exception e){
             model.addAttribute("error", e.getMessage());
-
+            return "home";
         }
-        return null;
+
     }
 }

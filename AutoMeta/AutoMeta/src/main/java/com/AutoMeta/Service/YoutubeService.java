@@ -1,86 +1,230 @@
 package com.AutoMeta.Service;
 
 import com.AutoMeta.Model.SearchVideo;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.AutoMeta.Model.Video;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
+/**
+ * YoutubeService
+ *
+ * This service is responsible for interacting with the YouTube Data API
+ * to search for videos based on a given title or keyword.
+ * It uses Spring's WebClient for non-blocking HTTP calls.
+ *
+ * Responsibilities:
+ *  - Search videos on YouTube using title/keywords
+ *  - Retrieve video IDs from the search response
+ *  - Prepare data models for further processing (like thumbnails, metadata, etc.)
+ *
+ * Author: Neelmani Bhardwaj
+ * Date: October 2025
+ */
 @Service
 @RequiredArgsConstructor
 public class YoutubeService {
-    // we will be using web client dependency
 
-
+    /**
+     * WebClient builder injected by Spring.
+     * Used to perform asynchronous API calls to the YouTube Data API.
+     */
     private final WebClient.Builder webClientBuilder;
 
+    /**
+     * API key for authenticating YouTube Data API requests.
+     * Value is injected from application.properties or environment variable.
+     */
     @Value("${youtube.api.key}")
     private String apiKey;
 
+    /**
+     * Base URL for the YouTube Data API.
+     * Example: https://www.googleapis.com/youtube/v3
+     */
     @Value("${youtube.api.base.url}")
     private String baseUrl;
 
+    /**
+     * The maximum number of related videos to fetch for each search.
+     * This helps control API usage and limit the response size.
+     */
     @Value("${youtube.api.max.related.videos}")
     private int maxRelatedVideos;
 
-    public SearchVideo searchVideos(String videoTitle){
+    /**
+     * Searches for videos on YouTube based on the provided video title.
+     *
+     * Steps:
+     *  1. Calls the helper method to retrieve video IDs from YouTube.
+     *  2. (Future implementation) Fetches detailed information about those videos.
+     *
+     * @param videoTitle The search keyword or title to look up on YouTube.
+     * @return A SearchVideo object containing results (to be implemented).
+     */
+    public SearchVideo searchVideos(String videoTitle) {
         List<String> videoIds = searchForVideosIds(videoTitle);
 
-        return null;
-
+        // TODO: Use videoIds to fetch full video details (title, description, etc.)
+       if(videoIds.isEmpty()){
+           return SearchVideo.builder()
+                   .primaryVideo(null)
+                   .relatedVideos(Collections.emptyList())
+                   .build();
+       }
+       String primaryVideoId = videoIds.get(0);
+       List<String> relatedVideoIds =videoIds.subList(1,Math.min(videoIds.size(), maxRelatedVideos));
+       Video primaryVideo = getVideoById(primaryVideoId);
+       List<Video> relatedVideos = new ArrayList<>();
+       for(String id: relatedVideoIds){
+           Video video = getVideoById(id);
+           if(video != null){
+               relatedVideos.add(video);
+           }
+       }
+       return SearchVideo.builder()
+               .primaryVideo(primaryVideo)
+               .relatedVideos(relatedVideos)
+               .build();
     }
 
+    /**
+     * Helper method that makes a request to the YouTube Search API
+     * and retrieves the list of video IDs matching the given title.
+     *
+     * @param videoTitle The search query (e.g., "Spring Boot Tutorial").
+     * @return List of YouTube video IDs matching the search query.
+     */
     private List<String> searchForVideosIds(String videoTitle) {
+
+        // Build a WebClient and call the /search endpoint of the YouTube API
         SearchApiResponse response = webClientBuilder.baseUrl(baseUrl).build()
                 .get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/search")
-                        .queryParam("part", "snippet")
-                        .queryParam("q", videoTitle)
-                        .queryParam("type", "video")
-                        .queryParam("maxResult", maxRelatedVideos)
-                        .queryParam("key", apiKey)
+                        .queryParam("part", "snippet") // We need snippet for title, description, etc.
+                        .queryParam("q", videoTitle) // The user query
+                        .queryParam("type", "video") // Restrict results to videos only
+                        .queryParam("maxResults", maxRelatedVideos) // Limit number of returned videos
+                        .queryParam("key", apiKey) // API key for authentication
                         .build())
                 .retrieve()
                 .bodyToMono(SearchApiResponse.class)
-                .block();
+                .block(); // Block the response and actually returns the object, async mono
+
+        if(response ==null || response.items == null){
+            return Collections.emptyList();
+        }
+
+        List<String> videoIds = new ArrayList<>();
+
+        for(SearchItem item : response.items){
+            videoIds.add(item.id.videoId);
+        }
+        return videoIds;
+        // TODO: Extract video IDs from the response (currently not returned)
 
     }
+
+
+
+
+
+    public Video getVideoById(String videoId){
+        VideoApiResponse response = webClientBuilder.baseUrl(baseUrl).build()
+                .get()
+                .uri(uriBuilder -> uriBuilder
+                       .path("/videos")
+                        .queryParam("part", "snippet")
+                        .queryParam("id",videoId)
+                        .queryParam("key",apiKey)
+                        .build())
+                .retrieve()
+                .bodyToMono(VideoApiResponse.class)
+                .block();
+
+        if(response == null || response.items == null){
+            return null;
+        }
+        Snippet snippet = response.items.get(0).snippet;
+        return Video.builder()
+                .id(videoId)
+                .channelTitle(snippet.channelTitle)
+                .title(snippet.title)
+                .tags(snippet.tags ==null ? Collections.emptyList() : snippet.tags)
+                .build();
+    }
+
+    // -----------------------------
+    // Below are inner static classes
+    // representing the structure of the YouTube API JSON response.
+    // -----------------------------
+
+    /**
+     * Represents the overall structure of the search API response.
+     * Contains a list of SearchItem objects (each item = one search result).
+     */
     @Data
-    static  class SearchApiResponse{
+    static class SearchApiResponse {
         List<SearchItem> items;
     }
 
+    /**
+     * Represents each individual search result item in the API response.
+     * Contains an ID object that holds the video ID.
+     */
     @Data
-    static class SearchItem{
+    static class SearchItem {
         Id id;
     }
 
+    /**
+     * Holds the unique video ID returned from the YouTube API.
+     */
     @Data
-    static class Id{
-        String VideoId;
+    static class Id {
+        String videoId; // Use lowercase "videoId" to match actual YouTube API JSON key
     }
 
+    /**
+     * Represents the structure of the video details API response (future use).
+     * Used when fetching full video metadata.
+     */
     @Data
-    static class VideoApiResponse{
+    static class VideoApiResponse {
         List<VideoItem> items;
     }
 
     @Data
-    static class Snippet{
+    static class VideoItem{
+        Snippet snippet;
+    }
+
+    /**
+     * Represents a video’s basic information, including its title,
+     * description, channel name, tags, and thumbnail links.
+     */
+    @Data
+    static class Snippet {
         String title;
         String description;
         String channelTitle;
         String publishedAt;
         List<String> tags;
         Thumbnails thumbnails;
-
     }
 
+    /**
+     * Represents multiple available thumbnail resolutions for a video.
+     * The helper method selects the best available thumbnail URL.
+     */
     @Data
     static class Thumbnails {
         Thumbnail maxres;
@@ -88,6 +232,10 @@ public class YoutubeService {
         Thumbnail medium;
         Thumbnail _default;
 
+        /**
+         * Returns the best available thumbnail URL
+         * by checking higher-quality images first.
+         */
         String getBestThumbnailUrl() {
             if (maxres != null) return maxres.url;
             if (high != null) return high.url;
@@ -95,6 +243,12 @@ public class YoutubeService {
             return _default != null ? _default.url : "";
         }
     }
+    static class Thumbnail{
+        String url;
+    }
+
+}
+
 
 
 
