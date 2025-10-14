@@ -2,6 +2,13 @@
 
   <h1 style="font-size: 48px; letter-spacing: 2px; color: #fff;">🚀 AutoMeta</h1>
   <h3 style="color: #dcdcdc;">An Intelligent YouTube Metadata Analyzer & Tag Generator</h3>
+  <p style="margin-top: 10px;">
+  <a href="https://autometa-a2pr.onrender.com/" 
+     target="_blank" 
+     style="color: #00bfff; text-decoration: none; font-weight: bold;">
+     🔗 Live Demo
+  </a>
+</p>
 
   <img src="https://skillicons.dev/icons?i=java,spring,html,css,js,maven,docker,github" alt="Tech Stack" width="400" style="margin-top: 20px;">
 
