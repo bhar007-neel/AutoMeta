@@ -2,6 +2,7 @@ package com.AutoMeta.Service;
 
 import com.AutoMeta.Model.SearchVideo;
 import com.AutoMeta.Model.Video;
+import com.AutoMeta.Model.VideoDetails;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -132,6 +133,60 @@ public class YoutubeService {
         // TODO: Extract video IDs from the response (currently not returned)
 
     }
+    public VideoDetails getVideoDetails(String videoId) {
+        // Call YouTube Data API to get video details
+        VideoApiResponse response = webClientBuilder.baseUrl(baseUrl).build()
+                .get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/videos")
+                        .queryParam("part", "snippet")
+                        .queryParam("id", videoId)
+                        .queryParam("key", apiKey)
+                        .build())
+                .retrieve()
+                .bodyToMono(VideoApiResponse.class)
+                .block();
+
+        // Handle missing or empty response
+        if (response == null || response.items == null || response.items.isEmpty()) {
+            System.out.println("No video data found for ID: " + videoId);
+            return null;
+        }
+
+        // Extract snippet (title, description, etc.)
+        Snippet snippet = response.items.get(0).snippet;
+
+        // Determine thumbnail URL safely
+        String thumbnailUrl = null;
+        if (snippet.thumbnails != null) {
+            if (snippet.thumbnails.high != null && snippet.thumbnails.high.url != null)
+                thumbnailUrl = snippet.thumbnails.high.url;
+            else if (snippet.thumbnails.medium != null && snippet.thumbnails.medium.url != null)
+                thumbnailUrl = snippet.thumbnails.medium.url;
+            else if (snippet.thumbnails._default != null && snippet.thumbnails._default.url != null)
+                thumbnailUrl = snippet.thumbnails._default.url;
+        }
+
+        // Fallback to YouTube static thumbnail if API didn’t provide one
+        if (thumbnailUrl == null || thumbnailUrl.isEmpty()) {
+            thumbnailUrl = "https://img.youtube.com/vi/" + videoId + "/hqdefault.jpg";
+        }
+
+        System.out.println("Fetched thumbnail URL for " + videoId + ": " + thumbnailUrl);
+
+        // Build and return the VideoDetails object
+        return VideoDetails.builder()
+                .id(videoId)
+                .title(snippet.title)
+                .description(snippet.description)
+                .tags(snippet.tags == null ? Collections.emptyList() : snippet.tags)
+                .thumbnailUrl(thumbnailUrl)
+                .channelTitle(snippet.channelTitle)
+                .publishedAt(snippet.publishedAt)
+                .build();
+    }
+
+
 
 
 
