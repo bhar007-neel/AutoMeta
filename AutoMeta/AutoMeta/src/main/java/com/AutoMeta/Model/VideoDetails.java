@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 @Builder
-@Data
+@Data                  //@Data  This single annotation secretly generates: Getters, Setters, toString(), equals(), hashCode(),Without Lombok, you’d write 40+ lines of garbage.
 @NoArgsConstructor
 @AllArgsConstructor
 
